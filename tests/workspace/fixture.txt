@@ -1,0 +1,1 @@
+Workspace fixture for isolated VSCGE extension-host tests.

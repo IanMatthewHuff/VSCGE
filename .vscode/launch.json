@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "VSCGE + Dungeon Demo",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/demo"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/*/dist/**/*.js"],
+      "preLaunchTask": "VSCGE build"
+    },
+    {
+      "name": "VSCGE + Dungeon Demo (Web host)",
+      "type": "extensionHost",
+      "request": "launch",
+      "debugWebWorkerHost": true,
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/demo",
+        "--extensionDevelopmentKind=web"
+      ],
+      "outFiles": ["${workspaceFolder}/packages/*/dist/web/**/*.js"],
+      "preLaunchTask": "VSCGE build"
+    }
+  ]
+}
