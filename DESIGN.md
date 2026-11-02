@@ -6,6 +6,8 @@ The headless engine has no VS Code imports or mandatory entity/map/player types.
 
 Redux Toolkit is private implementation detail. A session validates immutable JSON state, computes the complete next state and presentation, and commits once. Player actions and enemy responses belong to the same game transition. Rejections and pre-commit failures preserve the old snapshot. Ordered explicit events are published after commit; subscriber errors are reported separately because the action already happened.
 
+Each presentation has one cached, frozen public view with action payloads removed. Repeated UI reads reuse that view without cloning inspection data; accepted transitions prepare the replacement before committing, while rejected actions leave the cached view unchanged.
+
 Session-local listeners, reentrancy guards, frozen snapshots, revision-checked action IDs, and disposal prevent cross-game interference. There is no global event queue, shared player slice, ECS, timer loop, or plugin framework.
 
 ## Shared IDE host

@@ -14,6 +14,29 @@ describe("genre-neutral atomic sessions", () => {
     expect(session.getView().text).toBe("Tokens taken: 1");
     expect(session.getView().actions[0]).not.toHaveProperty("action");
   });
+  it("reuses a frozen public view until an accepted action changes the presentation", () => {
+    const session = new GameSession(counter);
+    const before = session.getView();
+    expect(session.getView()).toBe(before);
+    expect(Object.isFrozen(before)).toBe(true);
+    expect(Object.isFrozen(before.details)).toBe(true);
+    expect(Object.isFrozen(before.details[0])).toBe(true);
+    expect(Object.isFrozen(before.actions)).toBe(true);
+    const action = before.actions[0];
+    if (!action) throw new Error("Expected a public action");
+    expect(() => { action.title = "Changed"; }).toThrow();
+    expect(action).not.toHaveProperty("action");
+    const listener = vi.fn();
+    session.subscribe(listener);
+    session.dispatch({ type: "take" });
+    const after = session.getView();
+    expect(after).not.toBe(before);
+    expect(after.text).toBe("Tokens taken: 1");
+    expect(before.text).toBe("Tokens taken: 0");
+    expect(session.getView()).toBe(after);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0]?.[0].view).toBe(after);
+  });
   it("notifies once with the final state and ordered events", () => {
     const session = new GameSession(counter);
     const listener = vi.fn(change => {
@@ -28,20 +51,27 @@ describe("genre-neutral atomic sessions", () => {
   it("leaves rejected actions and invalid inputs unchanged", () => {
     const session = new GameSession(counter);
     const before = session.getSnapshot();
+    const view = session.getView();
     const listener = vi.fn();
     session.subscribe(listener);
     expect(session.dispatch({ type: "reject" })).toEqual({ accepted: false, reason: "Not allowed" });
     expect(session.dispatch({ type: "unknown" }).accepted).toBe(false);
     expect(session.getSnapshot()).toBe(before);
+    expect(session.getView()).toBe(view);
     expect(session.revision).toBe(0);
     expect(listener).not.toHaveBeenCalled();
   });
   it("supports accepted non-turn actions and rejects stale revisions", () => {
     const session = new GameSession(counter);
+    const before = session.getView();
     session.dispatch({ type: "peek" });
     expect(session.turn).toBe(0);
     expect(session.revision).toBe(1);
+    const after = session.getView();
+    expect(after).not.toBe(before);
+    expect(after.text).toBe("Tokens taken: 1");
     expect(session.execute("take", 0).accepted).toBe(false);
+    expect(session.getView()).toBe(after);
   });
   it("never commits failed rules, invalid next state, or invalid presentation", () => {
     for (const definition of [
@@ -54,8 +84,10 @@ describe("genre-neutral atomic sessions", () => {
     ]) {
       const session = new GameSession(definition);
       const before = session.getSnapshot();
+      const view = session.getView();
       expect(() => session.dispatch({ type: "take" })).toThrow();
       expect(session.getSnapshot()).toBe(before);
+      expect(session.getView()).toBe(view);
       expect(session.revision).toBe(0);
     }
   });

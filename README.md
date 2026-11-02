@@ -11,7 +11,7 @@ A small turn-based game framework for native VS Code surfaces, on Desktop and th
 
 ## Develop and play
 
-Requires Node 22+ and npm.
+Requires Node 22.12+ within the 22.x release line, or Node 24+, and npm.
 
 ```sh
 npm ci

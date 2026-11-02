@@ -3,7 +3,7 @@ import { EngineError, errorMessage, immutableJson } from "./json";
 import { publicView, validatePresentation } from "./presentation";
 import {
   isRecord, type ActionResult, type GameDefinition, type GameEvent, type LogicalInput,
-  type Presentation, type SaveEnvelope, type SessionChange, type SessionPort, type Snapshot,
+  type Presentation, type SaveEnvelope, type SessionChange, type SessionPort, type SessionView, type Snapshot,
 } from "./types";
 
 export function validateDefinition<S, A, E extends GameEvent>(game: GameDefinition<S, A, E>): void {
@@ -17,6 +17,7 @@ export class GameSession<S, A, E extends GameEvent = GameEvent> implements Sessi
   private readonly store: Store<Snapshot<S>>;
   private readonly commit = createAction<Snapshot<S>>("vscge/commit");
   private presentation: Presentation<A>;
+  private view: SessionView;
   private readonly listeners = new Set<(change: SessionChange) => void>();
   private disposed = false;
   private busy = false;
@@ -31,6 +32,7 @@ export class GameSession<S, A, E extends GameEvent = GameEvent> implements Sessi
     const snapshot = immutableJson(saved === undefined
       ? { turn: 0, state: this.decodeState(game.initialState()) } : this.restore(saved));
     this.presentation = validatePresentation(game.present(snapshot));
+    this.view = publicView(this.presentation);
     this.store = configureStore({
       reducer: (state: Snapshot<S> = snapshot, action) => this.commit.match(action) ? action.payload : state,
       devTools: false,
@@ -40,7 +42,7 @@ export class GameSession<S, A, E extends GameEvent = GameEvent> implements Sessi
   get revision(): number { return this.currentRevision; }
   get turn(): number { return this.store.getState().turn; }
   getSnapshot(): Snapshot<S> { return this.store.getState(); }
-  getView() { return publicView(this.presentation); }
+  getView(): SessionView { return this.view; }
 
   subscribe(listener: (change: SessionChange) => void): () => void {
     this.assertLive();
@@ -75,8 +77,10 @@ export class GameSession<S, A, E extends GameEvent = GameEvent> implements Sessi
       if (!Array.isArray(events) || events.some(event =>
         typeof event.type !== "string" || typeof event.message !== "string")) throw new EngineError("Invalid game event");
       const presentation = validatePresentation(this.game.present(snapshot));
+      const view = publicView(presentation);
       this.store.dispatch(this.commit(snapshot));
       this.presentation = presentation;
+      this.view = view;
       this.currentRevision++;
       const notificationErrors: string[] = [];
       const change = { view: this.getView(), events };
