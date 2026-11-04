@@ -1,0 +1,14 @@
+{
+  "name": "vscge-pack",
+  "displayName": "VSCGE Starter Pack",
+  "description": "Install the VSCGE host and its dungeon demo together",
+  "version": "0.1.0",
+  "private": true,
+  "files": ["README.md"],
+  "publisher": "vscge-dev",
+  "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "https://github.com/IanMatthewHuff/VSCGE.git" },
+  "engines": { "vscode": "^1.96.0" },
+  "categories": ["Extension Packs"],
+  "extensionPack": ["vscge-dev.vscge", "vscge-dev.vscdc-demo"]
+}

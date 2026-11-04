@@ -1,0 +1,60 @@
+{
+  "name": "vscge",
+  "displayName": "VSCGE - Turn-based Game Engine",
+  "description": "Shared native IDE host for turn-based game extensions",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "vscge-dev",
+  "license": "UNLICENSED",
+  "repository": { "type": "git", "url": "https://github.com/IanMatthewHuff/VSCGE.git" },
+  "engines": { "vscode": "^1.96.0" },
+  "categories": ["Other"],
+  "main": "./dist/extension.js",
+  "browser": "./dist/web/extension.js",
+  "extensionKind": ["ui"],
+  "activationEvents": ["onUri"],
+  "capabilities": { "virtualWorkspaces": true, "untrustedWorkspaces": { "supported": true } },
+  "contributes": {
+    "commands": [
+      { "command": "vscge.start", "title": "Start Game", "category": "VSCGE" },
+      { "command": "vscge.restart", "title": "Restart Game", "category": "VSCGE" },
+      { "command": "vscge.stop", "title": "Stop Game", "category": "VSCGE" },
+      { "command": "vscge.save", "title": "Save Game", "category": "VSCGE" },
+      { "command": "vscge.load", "title": "Load Game", "category": "VSCGE" },
+      { "command": "vscge.actions", "title": "Choose Action", "category": "VSCGE" },
+      { "command": "vscge.execute", "title": "Execute Game Action", "category": "VSCGE" },
+      { "command": "vscge.up", "title": "Input Up", "category": "VSCGE" },
+      { "command": "vscge.down", "title": "Input Down", "category": "VSCGE" },
+      { "command": "vscge.left", "title": "Input Left", "category": "VSCGE" },
+      { "command": "vscge.right", "title": "Input Right", "category": "VSCGE" }
+    ],
+    "keybindings": [
+      { "command": "vscge.up", "key": "w", "when": "editorTextFocus && resourceScheme == vscge && vscge.documentFocused && vscge.input.up" },
+      { "command": "vscge.down", "key": "s", "when": "editorTextFocus && resourceScheme == vscge && vscge.documentFocused && vscge.input.down" },
+      { "command": "vscge.left", "key": "a", "when": "editorTextFocus && resourceScheme == vscge && vscge.documentFocused && vscge.input.left" },
+      { "command": "vscge.right", "key": "d", "when": "editorTextFocus && resourceScheme == vscge && vscge.documentFocused && vscge.input.right" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        { "id": "vscge-games", "title": "VSCGE", "icon": "media/game.svg" }
+      ]
+    },
+    "views": {
+      "vscge-games": [
+        { "id": "vscge.details", "name": "Game Details" },
+        { "id": "vscge.actionsView", "name": "Game Actions" },
+        { "id": "vscge.inspector", "name": "Game Inspector" }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        { "command": "vscge.execute", "when": "false" },
+        { "command": "vscge.up", "when": "false" },
+        { "command": "vscge.down", "when": "false" },
+        { "command": "vscge.left", "when": "false" },
+        { "command": "vscge.right", "when": "false" }
+      ]
+    }
+  },
+  "dependencies": { "@vscge/engine": "0.1.0" }
+}

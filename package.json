@@ -1,0 +1,27 @@
+{
+  "name": "vscge-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "engines": { "node": "^22.12.0 || >=24.0.0" },
+  "scripts": {
+    "build": "npm run build -w @vscge/engine && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:desktop": "node scripts/test-host.mjs desktop",
+    "test:web": "node scripts/test-host.mjs web",
+    "package": "npm run build && node scripts/package.mjs",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.96.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^4.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  }
+}
