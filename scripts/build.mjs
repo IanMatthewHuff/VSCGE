@@ -19,8 +19,9 @@ await Promise.all(["vscode", "demo"].flatMap(name => ["node", "browser"].map(pla
     outfile: `packages/${name}/dist/${platform === "browser" ? "web/" : ""}extension.js`,
   }),
 )));
-await build({
+await Promise.all([false, true].map(coreOnly => build({
   ...shared, platform: "browser", entryPoints: ["tests/host/smoke.ts"],
-  outfile: "packages/vscode/dist/smoke.js",
-});
+  define: { ...shared.define, VSCGE_TEST_CORE_ONLY: JSON.stringify(coreOnly) },
+  outfile: `packages/vscode/dist/${coreOnly ? "smoke-core-only" : "smoke"}.js`,
+})));
 console.log("Built core, demo, and extension-host smoke tests (desktop + browser).");

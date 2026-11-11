@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+jobs:
+  checks:
+    name: Checks (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  integration:
+    name: VS Code (${{ matrix.host }}, ${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [desktop, web]
+        mode: [full, core-only]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Chromium and Linux browser dependencies
+        if: matrix.host == 'web'
+        run: node node_modules/playwright/cli.js install --with-deps chromium
+      - name: Run extension-host tests
+        env:
+          TEST_HOST: ${{ matrix.host }}
+          TEST_MODE: ${{ matrix.mode }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/vscge-logs"
+          command=(npm run "test:$TEST_HOST" --)
+          if [[ "$TEST_MODE" == "core-only" ]]; then
+            command+=(--core-only)
+          fi
+          if [[ "$TEST_HOST" == "desktop" ]]; then
+            command=(xvfb-run -a "${command[@]}")
+          fi
+          "${command[@]}" 2>&1 | tee "$RUNNER_TEMP/vscge-logs/host.log"
+      - name: Upload host failure log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: host-${{ matrix.host }}-${{ matrix.mode }}
+          path: ${{ runner.temp }}/vscge-logs
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ci:
+    name: CI
+    if: always()
+    needs: [checks, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require all checks and host variants to pass
+        env:
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
+        run: |
+          echo "Checks: $CHECKS_RESULT; integration: $INTEGRATION_RESULT"
+          [[ "$CHECKS_RESULT" == "success" && "$INTEGRATION_RESULT" == "success" ]]
