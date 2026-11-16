@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GameSession } from "@vscge/engine";
+import { GameSession, type GameEvent } from "@vscge/engine";
 import { decodeDungeon, dungeon, type DungeonState } from "../../packages/demo/src/game";
 
 function create(state: DungeonState) { return new GameSession({ ...dungeon, initialState: () => state }); }
@@ -78,5 +78,73 @@ describe("minimal dungeon", () => {
     expect(view.text.split("\n")[7]?.[2]).toBe("@");
     expect(view.inspections?.find(entry => entry.range.line === 7 && entry.range.start === 2)?.details)
       .toContainEqual({ id: "hp", label: "Player HP", value: "8" });
+  });
+  it("replays the same combat and events after a mid-combat save/load", () => {
+    const original = create(adjacent());
+    original.input("right", 0);
+    const restored = new GameSession(dungeon, dungeon.id, JSON.parse(JSON.stringify(original.serialize())));
+    expect(restored.getSnapshot()).toEqual(original.getSnapshot());
+    expect(restored.getView()).toEqual(original.getView());
+    const originalEvents: (readonly GameEvent[])[] = [];
+    const restoredEvents: (readonly GameEvent[])[] = [];
+    original.subscribe(change => originalEvents.push(change.events));
+    restored.subscribe(change => restoredEvents.push(change.events));
+    for (const input of ["up", "right"] as const) {
+      expect(original.input(input, original.revision).accepted).toBe(true);
+      expect(restored.input(input, restored.revision).accepted).toBe(true);
+      expect(restored.getSnapshot()).toEqual(original.getSnapshot());
+      expect(restored.getView()).toEqual(original.getView());
+    }
+    expect(original.getSnapshot().state.outcome).toBe("victory");
+    expect(restoredEvents).toEqual(originalEvents);
+  });
+  it.each(["up", "down", "left", "right"] as const)("advertises and executes the %s input", input => {
+    const session = new GameSession(dungeon);
+    expect(session.getView().inputs?.[input]).toBe(input);
+    expect(session.getView().actions.find(action => action.id === input)).toEqual({
+      id: input, title: `Move / attack ${input}`,
+    });
+    expect(session.input(input, 0)).toMatchObject({ accepted: true, turn: 1 });
+  });
+  it.each(["victory", "defeat"] as const)("disables every action after %s without changing state", outcome => {
+    const state = adjacent();
+    state.outcome = outcome;
+    if (outcome === "victory") state.enemies = [];
+    else state.player.hp = 0;
+    const session = create(state);
+    const snapshot = session.getSnapshot();
+    const view = session.getView();
+    const changes: unknown[] = [];
+    session.subscribe(change => changes.push(change));
+    expect(view.actions).toHaveLength(4);
+    for (const action of view.actions) {
+      expect(action.disabledReason).toBe("Game over. Restart to play again.");
+      expect(session.execute(action.id, 0).accepted).toBe(false);
+    }
+    for (const input of ["up", "down", "left", "right"] as const) {
+      expect(session.input(input, 0).accepted).toBe(false);
+    }
+    expect(session.getSnapshot()).toBe(snapshot);
+    expect(session.getView()).toBe(view);
+    expect(session.turn).toBe(0);
+    expect(session.revision).toBe(0);
+    expect(changes).toEqual([]);
+  });
+  it("resolves tied enemy moves in order without occupying the same cell", () => {
+    const state = adjacent();
+    state.enemies = [
+      { id: "first", position: { x: 5, y: 2 }, hp: 3 },
+      { id: "second", position: { x: 5, y: 4 }, hp: 3 },
+    ];
+    const session = create(state);
+    expect(session.input("left", 0).accepted).toBe(true);
+    expect(session.getSnapshot().state.enemies.map(enemy => enemy.position)).toEqual([
+      { x: 5, y: 3 }, { x: 4, y: 4 },
+    ]);
+    expect(decodeDungeon(session.getSnapshot().state).ok).toBe(true);
+    const replay = create(state);
+    replay.input("left", 0);
+    expect(replay.getSnapshot()).toEqual(session.getSnapshot());
+    expect(state.enemies.map(enemy => enemy.position)).toEqual([{ x: 5, y: 2 }, { x: 5, y: 4 }]);
   });
 });

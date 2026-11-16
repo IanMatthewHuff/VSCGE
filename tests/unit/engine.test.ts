@@ -73,6 +73,77 @@ describe("genre-neutral atomic sessions", () => {
     expect(session.execute("take", 0).accepted).toBe(false);
     expect(session.getView()).toBe(after);
   });
+  it("routes bound inputs and rejects disabled, unknown, and stale actions without notifying", () => {
+    const session = new GameSession({
+      ...counter,
+      present: snapshot => ({
+        ...counter.present(snapshot),
+        actions: [
+          { id: "take", title: "Take", action: { type: "take" as const } },
+          { id: "locked", title: "Locked", action: { type: "take" as const }, disabledReason: "Locked" },
+        ],
+        inputs: { up: "take", down: "locked" },
+      }),
+    });
+    const listener = vi.fn();
+    session.subscribe(listener);
+    const before = session.getSnapshot();
+    expect(session.execute("missing", 0)).toEqual({ accepted: false, reason: "Unknown action: missing" });
+    expect(session.input("down", 0)).toEqual({ accepted: false, reason: "Locked" });
+    expect(session.getSnapshot()).toBe(before);
+    expect(listener).not.toHaveBeenCalled();
+    expect(session.input("up", 0)).toMatchObject({ accepted: true, turn: 1, revision: 1 });
+    expect(session.input("up", 0).accepted).toBe(false);
+    expect(session.turn).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    {
+      name: "non-boolean turn metadata",
+      result: { accepted: true as const, consumesTurn: "yes", state: { count: 1 }, events: [] },
+      error: "consumesTurn",
+    },
+    {
+      name: "malformed events",
+      result: { accepted: true as const, consumesTurn: true, state: { count: 1 }, events: [{ type: "count", message: 1 }] },
+      error: "Invalid game event",
+    },
+  ])("rolls back $name and accepts a subsequent valid action", ({ result, error }) => {
+    const transition = vi.fn(counter.transition);
+    // Deliberately model an untyped game returning a value outside the SDK contract.
+    // @ts-expect-error Invalid plugin return data must be checked at runtime.
+    transition.mockReturnValueOnce(result);
+    const session = new GameSession({ ...counter, transition });
+    const snapshot = session.getSnapshot();
+    const view = session.getView();
+    const listener = vi.fn();
+    session.subscribe(listener);
+    expect(() => session.dispatch({ type: "take" })).toThrow(error);
+    expect(session.getSnapshot()).toBe(snapshot);
+    expect(session.getView()).toBe(view);
+    expect(session.revision).toBe(0);
+    expect(listener).not.toHaveBeenCalled();
+    expect(session.dispatch({ type: "take" }).accepted).toBe(true);
+    expect(session.getSnapshot()).toEqual({ turn: 1, state: { count: 1 } });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+  it("rejects turn overflow atomically but still permits non-turn actions", () => {
+    const saved = new GameSession(counter).serialize();
+    const session = new GameSession(counter, counter.id, {
+      ...saved, snapshot: { turn: Number.MAX_SAFE_INTEGER, state: { count: 0 } },
+    });
+    const snapshot = session.getSnapshot();
+    const view = session.getView();
+    const listener = vi.fn();
+    session.subscribe(listener);
+    expect(() => session.dispatch({ type: "take" })).toThrow("Turn counter");
+    expect(session.getSnapshot()).toBe(snapshot);
+    expect(session.getView()).toBe(view);
+    expect(session.revision).toBe(0);
+    expect(listener).not.toHaveBeenCalled();
+    expect(session.dispatch({ type: "peek" })).toMatchObject({ accepted: true, turn: Number.MAX_SAFE_INTEGER });
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
   it("never commits failed rules, invalid next state, or invalid presentation", () => {
     for (const definition of [
       { ...counter, transition: () => { throw new Error("rules failed"); } },
@@ -154,6 +225,17 @@ describe("JSON and optional text-grid helpers", () => {
       () => 1, BigInt(1), cyclic, Array(2), { [Symbol("x")]: 1 }]) expect(() => assertJson(bad)).toThrow();
     expect(() => assertJson({ value: [null, 1, "x", true] })).not.toThrow();
   });
+  it("rejects hidden properties, accessors and extended arrays without invoking getters", () => {
+    const getter = vi.fn(() => 1);
+    for (const bad of [
+      Object.defineProperty({}, "hidden", { value: 1 }),
+      Object.defineProperty({}, "value", { enumerable: true, get: getter }),
+      Object.assign([1], { extra: 2 }),
+    ]) expect(() => assertJson(bad)).toThrow();
+    expect(getter).not.toHaveBeenCalled();
+    const shared = { count: 1 };
+    expect(() => assertJson({ first: shared, second: shared })).not.toThrow();
+  });
   it("derives ranges from the actual header and enforces ASCII rectangular cells", () => {
     const grid = renderGrid(["#.", ".#"], ["Title", "", "More", ""]);
     expect(grid.range({ x: 1, y: 1 })).toEqual({ line: 5, start: 1, end: 2 });
@@ -161,5 +243,16 @@ describe("JSON and optional text-grid helpers", () => {
     expect(() => grid.range({ x: 0.5, y: 0 })).toThrow();
     expect(() => renderGrid(["##", "#"])).toThrow();
     expect(() => renderGrid(["\u{1f600}"])).toThrow();
+  });
+  it("validates layout boundaries and preserves header/footer coordinates", () => {
+    for (const [rows, header, footer] of [
+      [[], [], []], [[""], [], []], [["."], ["bad\nheader"], []], [["."], [], ["bad\rfooter"]],
+    ]) expect(() => renderGrid(rows!, header, footer)).toThrow();
+    const grid = renderGrid(["..", "##"], ["Header"], ["Footer"]);
+    expect(grid.text).toBe("Header\n..\n##\nFooter");
+    expect(grid.range({ x: 1, y: 1 })).toEqual({ line: 2, start: 1, end: 2 });
+    for (const position of [{ x: -1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 }, { x: 0, y: NaN }]) {
+      expect(() => grid.range(position)).toThrow("outside the grid");
+    }
   });
 });

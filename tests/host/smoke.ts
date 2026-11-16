@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import { CORE_EXTENSION_ID, isVscgeApi } from "@vscge/engine";
 import { counter } from "../fixtures/counter";
 
+declare const VSCGE_TEST_CORE_ONLY: boolean;
+
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
@@ -20,7 +22,10 @@ export async function run(): Promise<void> {
   check(isVscgeApi(api), "Versioned core API is available");
   check(!api.getActiveGame(), "Core starts with no active game");
   const demo = vscode.extensions.getExtension("vscge-dev.vscdc-demo");
+  if (VSCGE_TEST_CORE_ONLY) check(!demo, "Core-only smoke must run without the demo installed");
+  else check(demo, "Full smoke requires the Dungeon Demo extension; refusing to skip demo coverage");
   if (demo) {
+    console.log("VSCGE smoke: demo discovery, focused input and workspace lifecycle.");
     check(!demo.isActive, "Game discovery should not eagerly activate the demo");
     const gameId = "vscge-dev.vscdc-demo/dungeon";
     check(await vscode.commands.executeCommand("vscge.start", gameId), "Start discovers and activates the game");
@@ -29,7 +34,7 @@ export async function run(): Promise<void> {
     await waitFor(() => document.getText().includes("Turn: 0"), "initial document");
     check(vscode.window.activeTextEditor?.document.uri.toString() === document.uri.toString(),
       "Revealing the game sidebar and log leaves the game editor focused");
-    check(await vscode.commands.executeCommand("vscge.execute", "up"), "Movement is accepted");
+    check(await vscode.commands.executeCommand("vscge.up"), "Focused movement command is accepted");
     await waitFor(() => document.getText().includes("Turn: 1"), "updated document");
     check(api.getActiveGame()?.turn === 1, "Movement advances exactly one turn");
     check(await vscode.commands.executeCommand("vscge.save"), "Workspace save succeeds");
@@ -38,16 +43,17 @@ export async function run(): Promise<void> {
     check(await vscode.commands.executeCommand("vscge.load"), "Workspace load succeeds");
     check(api.getActiveGame()?.turn === 1, "Load restores saved turn");
     await waitFor(() => document.getText().includes("Turn: 1"), "loaded document");
-    const editor = await vscode.window.showTextDocument(document);
-    editor.selection = new vscode.Selection(6, 2, 6, 2);
-    await vscode.commands.executeCommand("vscge.inspector.focus");
     const source = await vscode.workspace.openTextDocument({ content: "ordinary editor", language: "plaintext" });
     await vscode.window.showTextDocument(source);
     check(await vscode.commands.executeCommand("vscge.up") === false, "Movement is disabled outside the game document");
     check(api.getActiveGame()?.turn === 1, "Ordinary editors cannot advance the game");
     check(await api.stopGame(), "Stopping a clean game succeeds");
     await waitFor(() => document.getText().includes("No active game"), "stopped document");
+    check(await vscode.commands.executeCommand("vscgeDemo.start"), "Demo start command succeeds");
+    check(api.getActiveGame()?.id === gameId && api.getActiveGame()?.turn === 0, "Demo command starts a fresh dungeon");
+    check(await api.stopGame(), "Fresh demo stops without a discard prompt");
   }
+  console.log("VSCGE smoke: non-grid registration, documents, actions, save and disposal.");
   const registration = api.registerGame("tests.fixture", counter);
   try {
     check(await api.startGame("tests.fixture/counter"), "A non-grid game runs in the same host");

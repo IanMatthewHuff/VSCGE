@@ -8,22 +8,24 @@ import { tmpdir } from "node:os";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const coreOnly = process.argv.includes("--core-only");
 const extensions = [`${root}/packages/vscode`, ...(!coreOnly ? [`${root}/packages/demo`] : [])];
-const extensionTestsPath = `${root}/packages/vscode/dist/smoke.js`;
+const extensionTestsPath = join(root, "packages/vscode/dist", coreOnly ? "smoke-core-only.js" : "smoke.js");
 const workspace = `${root}/tests/workspace`;
+if (!existsSync(extensionTestsPath)) throw new Error("Run npm run build before running host tests");
+console.log(`VSCGE host tests: ${process.argv[2]}, ${coreOnly ? "core-only" : "full demo"}`);
 
 if (process.argv[2] === "desktop") {
   const { runTests, downloadAndUnzipVSCode } = await import("@vscode/test-electron");
   const data = await mkdtemp(join(tmpdir(), "vscge-"));
-  let executable = process.env.VSCODE_EXECUTABLE_PATH ?? await downloadAndUnzipVSCode();
-  // Recent macOS builds renamed Electron to Code; the test runner still returns Electron.
-  if (process.platform === "darwin" && basename(executable) === "Electron" && !existsSync(executable)) {
-    const renamed = join(dirname(executable), "Code");
-    if (existsSync(renamed)) {
-      console.log("Using the renamed macOS Code executable.");
-      executable = renamed;
-    }
-  }
   try {
+    let executable = process.env.VSCODE_EXECUTABLE_PATH ?? await downloadAndUnzipVSCode();
+    // Recent macOS builds renamed Electron to Code; the test runner still returns Electron.
+    if (process.platform === "darwin" && basename(executable) === "Electron" && !existsSync(executable)) {
+      const renamed = join(dirname(executable), "Code");
+      if (existsSync(renamed)) {
+        console.log("Using the renamed macOS Code executable.");
+        executable = renamed;
+      }
+    }
     await runTests({
       extensionDevelopmentPath: extensions,
       extensionTestsPath,
