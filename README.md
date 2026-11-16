@@ -11,7 +11,7 @@ A small turn-based game framework for native VS Code surfaces, on Desktop and th
 
 ## Develop and play
 
-Requires Node 22.12+ within the 22.x release line, or Node 24+, and npm.
+Requires Node 24.x and npm.
 
 ```sh
 npm ci
@@ -43,7 +43,7 @@ Host tests download official VS Code builds. Web tests also require the Chromium
 
 On headless Linux, prefix desktop tests with `xvfb-run -a`. For web tests, install Chromium and system dependencies with `node node_modules/playwright/cli.js install --with-deps chromium`.
 
-The [CI workflow](.github/workflows/ci.yml) runs on PRs and pushes to `main`: Node 22/24 checks and Ubuntu desktop/web integration, with and without the demo. The aggregate **CI** check requires all jobs to pass.
+The [CI workflow](.github/workflows/ci.yml) runs on PRs and pushes to `main`: Node 24 checks and Ubuntu desktop/web integration, with and without the demo. The aggregate **CI** check requires all jobs to pass.
 
 ### Package artifacts
 
